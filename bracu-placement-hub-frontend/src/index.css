@@ -1,0 +1,91 @@
+/* 
+  ============================================================================
+  CRITICAL: Leaflet CSS MUST be imported FIRST, before Tailwind
+  This ensures map styles work correctly and don't get overridden
+  ============================================================================
+*/
+@import "leaflet/dist/leaflet.css";
+
+/* 
+  ============================================================================
+  Tailwind CSS directives
+  ============================================================================
+*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+  ============================================================================
+  Custom Global Styles
+  ============================================================================
+*/
+
+/* Body styling */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Code blocks */
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
+
+/* 
+  ============================================================================
+  Leaflet Map Custom Styling
+  ============================================================================
+*/
+
+/* Ensure map container inherits font from your app */
+.leaflet-container {
+  font-family: inherit;
+}
+
+/* Fix for any potential z-index issues with map controls */
+.leaflet-control-zoom,
+.leaflet-control-attribution {
+  z-index: 999 !important;
+}
+
+/* Make map popups look nicer */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.leaflet-popup-content {
+  margin: 16px;
+  line-height: 1.5;
+}
+
+/* Style the popup tip (arrow) */
+.leaflet-popup-tip {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 
+  ============================================================================
+  Responsive Design for Maps
+  ============================================================================
+*/
+
+/* Ensure map is fully responsive */
+@media (max-width: 768px) {
+  .leaflet-container {
+    height: 300px !important;
+  }
+}
+
+/* 
+  ============================================================================
+  Additional Custom Styles (Add your own below)
+  ============================================================================
+*/
