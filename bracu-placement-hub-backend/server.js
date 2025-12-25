@@ -1401,10 +1401,6 @@ app.post("/api/recruiter/jobs", auth, recruiterAuth, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // Update job posting
 app.put("/api/recruiter/jobs/:jobId", auth, recruiterAuth, async (req, res) => {

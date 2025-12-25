@@ -49,6 +49,9 @@ import MessagesPage from "./pages/MessagesPage.jsx";
 import ForumPage from "./pages/ForumPage.jsx";
 import ForumPostDetail from "./pages/ForumPostDetail.jsx";
 
+// Calendar
+import CalendarPage from "./pages/CalendarPage.jsx";
+
 // Admin
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 
@@ -188,6 +191,14 @@ const router = createBrowserRouter([
   {
     path: "/forum/posts/:postId",
     element: <ForumPostDetail />, // NEW: Forum post detail with comments
+  },
+
+  // ============================================
+  // CALENDAR ROUTES
+  // ============================================
+  {
+    path: "/calendar",
+    element: <CalendarPage />, // NEW: View calendar, deadlines, and interviews
   },
 
   // ============================================
