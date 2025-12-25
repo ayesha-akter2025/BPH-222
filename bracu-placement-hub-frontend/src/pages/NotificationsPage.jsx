@@ -8,6 +8,7 @@ function NotificationsPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notificationError, setNotificationError] = useState("");
   const [filter, setFilter] = useState("all"); // all, unread
 
   useEffect(() => {
@@ -99,7 +100,14 @@ function NotificationsPage() {
 
     // Navigate to linked content
     if (notification.link) {
-      navigate(notification.link);
+      try {
+        navigate(notification.link);
+      } catch (err) {
+        setNotificationError(`Cannot navigate to: ${notification.link}`);
+        console.error("Navigation error:", err);
+      }
+    } else {
+      setNotificationError("This notification does not have a linked destination");
     }
   };
 
@@ -164,6 +172,18 @@ function NotificationsPage() {
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
             {error}
+          </div>
+        )}
+
+        {notificationError && (
+          <div className="mb-6 p-4 bg-orange-100 border border-orange-400 text-orange-700 rounded-md flex justify-between items-center">
+            <span>{notificationError}</span>
+            <button
+              onClick={() => setNotificationError("")}
+              className="text-orange-700 hover:text-orange-900 font-bold"
+            >
+              ✕
+            </button>
           </div>
         )}
 

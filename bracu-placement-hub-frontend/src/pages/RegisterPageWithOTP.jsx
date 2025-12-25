@@ -12,7 +12,7 @@ function RegisterPageWithOTP() {
     role: "student",
   });
   const [otp, setOtp] = useState("");
-  //const [sentOTP, setSentOTP] = useState(""); // For testing
+  const [sentOTP, setSentOTP] = useState(""); // For testing
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -89,7 +89,7 @@ function RegisterPageWithOTP() {
         throw new Error(data.error || "Failed to send OTP");
       }
 
-      //setSentOTP(data.otp); // For testing - REMOVE IN PRODUCTION
+      setSentOTP(data.otp); // For testing - REMOVE IN PRODUCTION
       setSuccess("OTP sent to your email! Valid for 10 minutes.");
       setStep(2);
     } catch (err) {

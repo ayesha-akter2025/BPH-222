@@ -11,6 +11,7 @@ function MessagesPage() {
   const [error, setError] = useState("");
   const [showCompose, setShowCompose] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [messageError, setMessageError] = useState("");
   
   // Compose form
   const [composeData, setComposeData] = useState({
@@ -53,9 +54,12 @@ function MessagesPage() {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
+      // 1. Clean the input (Remove spaces and lowercase)
+    const cleanEmail = composeData.recipientEmail.trim().toLowerCase();
     
-    if (!composeData.recipientEmail || !composeData.content) {
-      alert("Please fill in recipient email and message content");
+    //if (!composeData.recipientEmail || !composeData.content) {
+    if (!cleanEmail || !composeData.content) {  
+    alert("Please fill in recipient email and message content");
       return;
     }
 
@@ -63,20 +67,49 @@ function MessagesPage() {
       const token = localStorage.getItem("token");
       
       // First, find user by email
-      const usersResponse = await fetch(
-        `http://localhost:1350/api/admin/users?search=${composeData.recipientEmail}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      //const usersResponse = await fetch(
+      //http://localhost:1350/api/admin/users?search=${composeData.recipientEmail}`,
+      const response = await fetch("http://localhost:1350/api/messages/send", {
+        method: "POST",
+        headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}` 
+        },
+          body: JSON.stringify({
+          // Send email instead of recipientId. 
+          // Ensure your Backend Controller can handle 'recipientEmail' or 'email' in the body.
+          recipientEmail: cleanEmail, 
+          subject: composeData.subject,
+          content: composeData.content
+        }),
+      });
       
-      const usersData = await usersResponse.json();
-      const recipient = usersData.users?.find(u => u.email === composeData.recipientEmail);
+      const data = await response.json();
+      //const recipient = usersData.users?.find(u => u.email === composeData.recipientEmail);
       
-      if (!recipient) {
-        alert("User not found with this email");
-        return;
+      if (!recipient.ok) {
+         throw new Error(data.error || "Failed to send message");
+        //alert("User not found with this email");
+        //return;
       }
 
-      const response = await fetch("http://localhost:1350/api/messages/send", {
+      alert("Message sent successfully!");
+      setShowCompose(false);
+      setComposeData({
+        recipientId: "",
+        recipientEmail: "",
+        subject: "",
+        content: "",
+      });
+      setActiveTab("sent");
+      fetchMessages();
+    } catch (err) {
+      //console.error(err);
+      alert(err.message);
+    }
+  };
+
+      /*const response = await fetch("http://localhost:1350/api/messages/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -88,8 +121,8 @@ function MessagesPage() {
           content: composeData.content,
         }),
       });
-
-      const data = await response.json();
+  */
+      /*const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to send message");
@@ -109,9 +142,17 @@ function MessagesPage() {
       alert(err.message);
     }
   };
+  */
 
   const handleViewMessage = async (messageId) => {
     try {
+      setMessageError("");
+      
+      if (!messageId) {
+        setMessageError("Invalid message ID");
+        return;
+      }
+      
       const token = localStorage.getItem("token");
       const response = await fetch(
         `http://localhost:1350/api/messages/${messageId}`,
@@ -126,7 +167,8 @@ function MessagesPage() {
 
       setSelectedMessage(data.message);
     } catch (err) {
-      alert(err.message);
+      setMessageError(err.message || "Failed to load message");
+      setSelectedMessage(null);
     }
   };
 
@@ -360,6 +402,21 @@ function MessagesPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            ) : messageError ? (
+              <div className="bg-white rounded-lg shadow-md p-8">
+                <div className="text-center">
+                  <p className="text-lg text-red-600 font-semibold mb-4">⚠️ {messageError}</p>
+                  <button
+                    onClick={() => {
+                      setMessageError("");
+                      setSelectedMessage(null);
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    Back to Messages
+                  </button>
+                </div>
               </div>
             ) : selectedMessage ? (
               <div className="bg-white rounded-lg shadow-md p-6">

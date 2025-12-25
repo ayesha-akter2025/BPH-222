@@ -52,6 +52,9 @@ import ForumPostDetail from "./pages/ForumPostDetail.jsx";
 // Admin
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 
+// Error Page
+import ErrorPage from "./pages/ErrorPage.jsx";
+
 // Create the router configuration
 const router = createBrowserRouter([
   // ============================================
@@ -60,6 +63,7 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <LoginPage />, // Main login page
+    errorElement: <ErrorPage />,
   },
   {
     path: "/login",
@@ -192,6 +196,15 @@ const router = createBrowserRouter([
   {
     path: "/admin/dashboard",
     element: <AdminDashboard />,
+  },
+
+  // ============================================
+  // CATCH-ALL / ERROR ROUTES
+  // ============================================
+  {
+    path: "*",
+    element: <ErrorPage />,
+    errorElement: <ErrorPage />,
   },
 ]);
 

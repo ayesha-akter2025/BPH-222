@@ -16,6 +16,248 @@ const cron = require("node-cron");
 require("dotenv").config();
 const app = express();
 const { sendOTPEmail } = require('./EmailService');
+
+// =================================================================
+// GOOGLE CALENDAR API SETUP (Member 1/2 External API Integration)
+// =================================================================
+const { google } = require('googleapis');
+
+// Google Calendar API configuration
+const googleCalendar = google.calendar({
+  version: 'v3',
+  auth: new google.auth.GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/calendar'],
+    credentials: {
+      type: 'service_account',
+      project_id: process.env.GOOGLE_CALENDAR_PROJECT_ID,
+      private_key_id: process.env.GOOGLE_CALENDAR_KEY_ID,
+      private_key: process.env.GOOGLE_CALENDAR_PRIVATE_KEY ? process.env.GOOGLE_CALENDAR_PRIVATE_KEY.replace(/\\n/g, '\n') : null,
+      client_email: process.env.GOOGLE_CALENDAR_EMAIL,
+      client_id: process.env.GOOGLE_CALENDAR_CLIENT_ID,
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+      client_x509_cert_url: process.env.GOOGLE_CALENDAR_CERT_URL
+    }
+  })
+});
+
+// Helper function to add deadline to Google Calendar
+async function addApplicationDeadlineToCalendar(userEmail, jobTitle, company, deadline) {
+  try {
+    if (!process.env.GOOGLE_CALENDAR_EMAIL) {
+      console.warn('⚠️ Google Calendar not configured - skipping calendar sync');
+      return { success: false, reason: 'not_configured' };
+    }
+
+    const event = {
+      summary: `📋 Application Deadline: ${jobTitle} at ${company}`,
+      description: `Submit your application for ${jobTitle} position at ${company}`,
+      start: {
+        dateTime: new Date(deadline),
+        timeZone: 'Asia/Dhaka'
+      },
+      end: {
+        dateTime: new Date(new Date(deadline).getTime() + 60 * 60 * 1000), // 1 hour duration
+        timeZone: 'Asia/Dhaka'
+      },
+      attendees: [
+        { email: userEmail }
+      ],
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 24 * 60 },    // 1 day before
+          { method: 'email', minutes: 2 * 60 },     // 2 hours before
+          { method: 'popup', minutes: 30 }          // 30 min before
+        ]
+      },
+      colorId: '3' // Cyan color for application deadlines
+    };
+
+    const response = await googleCalendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+      sendUpdates: 'all'
+    });
+
+    console.log('✅ Application deadline added to calendar:', response.data.id);
+    return { success: true, eventId: response.data.id };
+  } catch (error) {
+    console.error('⚠️ Calendar sync error (continuing without calendar):', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to remove deadline from Google Calendar
+async function removeApplicationDeadlineFromCalendar(eventId) {
+  try {
+    if (!eventId || !process.env.GOOGLE_CALENDAR_EMAIL) {
+      return { success: false };
+    }
+
+    await googleCalendar.events.delete({
+      calendarId: 'primary',
+      eventId: eventId
+    });
+
+    console.log('✅ Application deadline removed from calendar');
+    return { success: true };
+  } catch (error) {
+    console.error('⚠️ Error removing calendar event:', error.message);
+    return { success: false };
+  }
+}
+
+// Helper function to create job posting event on Google Calendar
+async function createJobPostingEvent(jobTitle, company, deadline, location, description) {
+  try {
+    if (!process.env.GOOGLE_CALENDAR_EMAIL) {
+      console.warn('⚠️ Google Calendar not configured - skipping job posting event');
+      return { success: false, reason: 'not_configured' };
+    }
+
+    const event = {
+      summary: `💼 New Job Posted: ${jobTitle} at ${company}`,
+      description: `${description || 'New job opportunity available'}\n\nApplication Deadline: ${new Date(deadline).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+      location: location || 'Online',
+      start: {
+        dateTime: new Date(),
+        timeZone: 'Asia/Dhaka'
+      },
+      end: {
+        dateTime: new Date(new Date().getTime() + 2 * 60 * 60 * 1000),
+        timeZone: 'Asia/Dhaka'
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 0 }
+        ]
+      },
+      colorId: '5' // Purple color for job postings
+    };
+
+    const response = await googleCalendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+      sendUpdates: 'all'
+    });
+
+    console.log('✅ Job posting event created on calendar:', response.data.id);
+    return { success: true, eventId: response.data.id };
+  } catch (error) {
+    console.error('⚠️ Error creating job posting event:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to create recruitment drive/event on Google Calendar
+async function createRecruitmentDriveEvent(eventName, company, startTime, endTime, location, description, attendees = []) {
+  try {
+    if (!process.env.GOOGLE_CALENDAR_EMAIL) {
+      console.warn('⚠️ Google Calendar not configured - skipping recruitment drive event');
+      return { success: false, reason: 'not_configured' };
+    }
+
+    const event = {
+      summary: `🎓 Campus Recruitment Drive: ${eventName} - ${company}`,
+      description: `${description || 'Campus recruitment event'}\n\nCompany: ${company}`,
+      location: location || 'Campus',
+      start: {
+        dateTime: new Date(startTime),
+        timeZone: 'Asia/Dhaka'
+      },
+      end: {
+        dateTime: new Date(endTime),
+        timeZone: 'Asia/Dhaka'
+      },
+      attendees: attendees.map(email => ({ email, responseStatus: 'needsAction' })),
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 24 * 60 },    // 1 day before
+          { method: 'email', minutes: 2 * 60 },     // 2 hours before
+          { method: 'popup', minutes: 30 }          // 30 min before
+        ]
+      },
+      colorId: '2' // Blue color for recruitment drives
+    };
+
+    const response = await googleCalendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+      sendUpdates: 'all'
+    });
+
+    console.log('✅ Recruitment drive event created on calendar:', response.data.id);
+    return { success: true, eventId: response.data.id };
+  } catch (error) {
+    console.error('⚠️ Error creating recruitment drive event:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to create interview slot on Google Calendar
+async function scheduleInterviewSlot(studentEmail, recruiterEmail, jobTitle, company, interviewTime, meetLink = null) {
+  try {
+    if (!process.env.GOOGLE_CALENDAR_EMAIL) {
+      console.warn('⚠️ Google Calendar not configured - skipping interview scheduling');
+      return { success: false, reason: 'not_configured' };
+    }
+
+    const meetingDescription = meetLink 
+      ? `Interview Link: ${meetLink}\n\nClick the link to join the meeting.`
+      : 'Interview scheduled. Details to follow.';
+
+    const event = {
+      summary: `📞 Interview: ${jobTitle} at ${company}`,
+      description: meetingDescription,
+      start: {
+        dateTime: new Date(interviewTime),
+        timeZone: 'Asia/Dhaka'
+      },
+      end: {
+        dateTime: new Date(new Date(interviewTime).getTime() + 60 * 60 * 1000), // 1 hour duration
+        timeZone: 'Asia/Dhaka'
+      },
+      attendees: [
+        { email: studentEmail },
+        { email: recruiterEmail }
+      ],
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 24 * 60 },    // 1 day before
+          { method: 'email', minutes: 30 },         // 30 min before
+          { method: 'popup', minutes: 15 }          // 15 min before
+        ]
+      },
+      colorId: '1', // Red color for interviews
+      ...(meetLink && { 
+        conferenceData: {
+          conferenceSolution: {
+            key: { conferenceSolutionKey: { conferenceSolutionType: 'hangoutsMeet' } }
+          }
+        }
+      })
+    };
+
+    const response = await googleCalendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+      conferenceDataVersion: meetLink ? 1 : 0,
+      sendUpdates: 'all'
+    });
+
+    console.log('✅ Interview scheduled on calendar:', response.data.id);
+    return { success: true, eventId: response.data.id };
+  } catch (error) {
+    console.error('⚠️ Error scheduling interview:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // =================================================================
 // MIDDLEWARE
 // =================================================================
@@ -252,6 +494,20 @@ const DashboardSchema = new mongoose.Schema({
 });
 
 const Dashboard = mongoose.model("Dashboard", DashboardSchema);
+
+// Calendar Event Tracking Schema (for Google Calendar sync)
+const CalendarEventSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  application: { type: mongoose.Schema.Types.ObjectId, ref: "Application" },
+  job: { type: mongoose.Schema.Types.ObjectId, ref: "Job", required: true },
+  googleEventId: { type: String, required: true },
+  deadline: { type: Date, required: true },
+  jobTitle: String,
+  company: String,
+  eventType: { type: String, enum: ["application_deadline", "interview"], default: "application_deadline" }
+}, { timestamps: true });
+
+const CalendarEvent = mongoose.model("CalendarEvent", CalendarEventSchema);
 
 // =================================================================
 // UTILITY FUNCTIONS
@@ -952,12 +1208,39 @@ app.post("/api/jobs/apply", auth, async (req, res) => {
 
     await newApplication.save();
 
+    // 📅 GOOGLE CALENDAR INTEGRATION: Add application deadline to student's calendar
+    let calendarEventId = null;
+    if (job.applicationDeadline) {
+      const calendarResult = await addApplicationDeadlineToCalendar(
+        user.email,
+        job.title,
+        job.company,
+        job.applicationDeadline
+      );
+
+      if (calendarResult.success) {
+        // Track calendar event in database
+        const calendarEvent = new CalendarEvent({
+          user: req.user.id,
+          application: newApplication._id,
+          job: jobId,
+          googleEventId: calendarResult.eventId,
+          deadline: job.applicationDeadline,
+          jobTitle: job.title,
+          company: job.company,
+          eventType: 'application_deadline'
+        });
+        await calendarEvent.save();
+        calendarEventId = calendarResult.eventId;
+      }
+    }
+
     // Create notification for student
     await createNotification(
       req.user.id,
       "application",
       "Application Submitted",
-      `Your application for "${job.title}" at ${job.company} has been submitted successfully.`,
+      `Your application for "${job.title}" at ${job.company} has been submitted successfully.${job.applicationDeadline ? ' Deadline added to your Google Calendar! 📅' : ''}`,
       `/applications/${newApplication._id}`
     );
 
@@ -1080,11 +1363,44 @@ app.post("/api/recruiter/jobs", auth, recruiterAuth, async (req, res) => {
     const newJob = new Job(jobData);
     await newJob.save();
 
+    // 📅 GOOGLE CALENDAR INTEGRATION: Create calendar event for job posting
+    let calendarEventId = null;
+    if (newJob.applicationDeadline) {
+      const recruiter = await User.findById(req.user.id);
+      const calendarResult = await createJobPostingEvent(
+        newJob.title,
+        newJob.company,
+        newJob.applicationDeadline,
+        newJob.location,
+        newJob.description
+      );
+
+      if (calendarResult.success) {
+        // Store calendar event ID in job for future reference
+        calendarEventId = calendarResult.eventId;
+        console.log('✅ Job posting added to recruiter calendar:', calendarEventId);
+      }
+    }
+
+    // Create notification for recruiters/admins about new job posting
+    await createNotification(
+      req.user.id,
+      'system',
+      'Job Posted Successfully',
+      `Your job posting for "${newJob.title}" at ${newJob.company} is now live and accepting applications.${newJob.applicationDeadline ? ' Deadline added to calendar! 📅' : ''}`,
+      `/recruiter/jobs/${newJob._id}`
+    );
+
     res.status(201).json({
       success: true,
       message: "Job posted successfully",
       job: newJob,
+      calendarEvent: calendarEventId ? { eventId: calendarEventId, message: "Job posting added to calendar" } : null
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1495,17 +1811,84 @@ app.post("/api/invitations/:invitationId/respond", auth, async (req, res) => {
 // Send message
 app.post("/api/messages/send", auth, async (req, res) => {
   try {
-    const { recipientId, subject, content } = req.body;
+    const { recipientId, recipientEmail, subject, content } = req.body;
     
-    if (!recipientId || !content) {
+    if (!content) {
       return res.status(400).json({ 
         success: false, 
-        error: "Recipient and content are required" 
+        error: "Content is required" 
       });
     }
     
     // Verify recipient exists
-    const recipient = await User.findById(recipientId);
+    // 2. Determine the Recipient ID
+    let finalRecipientId = recipientId;
+
+     // If no ID is provided but we have an email, find the user by email
+    if (!finalRecipientId && recipientEmail) {
+      const userByEmail = await User.findOne({ email: recipientEmail });
+      if (userByEmail) {
+        finalRecipientId = userByEmail._id;
+      }
+    }
+
+    // 3. Check if we found a valid recipient
+    if (!finalRecipientId) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Recipient not found. Please check the email address." 
+      });
+    }
+
+    // (Optional) Verify the user exists in DB to be safe
+    const recipient = await User.findById(finalRecipientId);
+    if (!recipient) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Recipient no longer exists" 
+      });
+    }
+    
+    // 4. Create the message using the resolved finalRecipientId
+    const message = new Message({
+      sender: req.user.id,
+      recipient: finalRecipientId,
+      subject: subject || '(No subject)',
+      content
+    });
+    
+    await message.save();
+    
+    // Create notification for recipient
+    // Ensure createNotification is imported or available in this scope
+    try {
+      if (typeof createNotification === 'function') {
+        await createNotification(
+          finalRecipientId,
+          'message',
+          'New Message',
+          `You have a new message from ${req.user.name}`,
+          `/messages/${message._id}`,
+          message._id
+        );
+      }
+    } catch (notifError) {
+      console.error("Notification failed but message sent:", notifError);
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      message: "Message sent successfully",
+      messageData: message 
+    });
+
+  } catch (error) {
+    console.error("Send message error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+    /*const recipient = await User.findById(recipientId);
     if (!recipient) {
       return res.status(404).json({ 
         success: false, 
@@ -1520,27 +1903,9 @@ app.post("/api/messages/send", auth, async (req, res) => {
       content
     });
     await message.save();
-    
+    */
     // Create notification for recipient
-    await createNotification(
-      recipientId,
-      'message',
-      'New Message',
-      `You have a new message from ${req.user.name}`,
-      `/messages/${message._id}`,
-      message._id
-    );
     
-    res.status(201).json({ 
-      success: true, 
-      message: "Message sent successfully",
-      messageData: message 
-    });
-  } catch (error) {
-    console.error("Send message error:", error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // Get inbox
 app.get("/api/messages/inbox", auth, async (req, res) => {
@@ -1571,6 +1936,11 @@ app.get("/api/messages/sent", auth, async (req, res) => {
 // Get single message
 app.get("/api/messages/:messageId", auth, async (req, res) => {
   try {
+    // Validate MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.messageId)) {
+      return res.status(400).json({ success: false, error: "Invalid message ID format" });
+    }
+    
     const message = await Message.findOne({
       _id: req.params.messageId,
       $or: [
@@ -1956,6 +2326,11 @@ app.get("/api/notifications", auth, async (req, res) => {
 // Mark notification as read
 app.put("/api/notifications/:notificationId/read", auth, async (req, res) => {
   try {
+    // Validate MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.notificationId)) {
+      return res.status(400).json({ success: false, error: "Invalid notification ID format" });
+    }
+    
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.notificationId, user: req.user.id },
       { read: true },
@@ -2502,8 +2877,315 @@ app.post("/api/test/create-notification", auth, async (req, res) => {
 });
 
 // =================================================================
+// ADVANCED CALENDAR FEATURES
+// Interview Scheduling, Recruitment Drives, Event Management
+// =================================================================
+
+// Schedule interview with student
+app.post("/api/calendar/schedule-interview", auth, recruiterAuth, async (req, res) => {
+  try {
+    const { studentId, jobId, interviewTime, meetingLink } = req.body;
+
+    // Validate required fields
+    if (!studentId || !jobId || !interviewTime) {
+      return res.status(400).json({
+        success: false,
+        error: "studentId, jobId, and interviewTime are required"
+      });
+    }
+
+    // Verify job belongs to recruiter
+    const job = await Job.findOne({ _id: jobId, recruiter: req.user.id });
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: "Job not found or you don't have permission"
+      });
+    }
+
+    // Verify student exists and get email
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: "Student not found"
+      });
+    }
+
+    // Get recruiter email
+    const recruiter = await User.findById(req.user.id);
+
+    // Schedule interview on Google Calendar
+    const calendarResult = await scheduleInterviewSlot(
+      student.email,
+      recruiter.email,
+      job.title,
+      job.company,
+      interviewTime,
+      meetingLink
+    );
+
+    if (!calendarResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: "Failed to schedule interview on calendar"
+      });
+    }
+
+    // Create notification for student
+    await createNotification(
+      studentId,
+      'system',
+      'Interview Scheduled',
+      `Your interview for ${job.title} at ${job.company} has been scheduled for ${new Date(interviewTime).toLocaleString()}. Check your calendar for details.`,
+      `/notifications`,
+      jobId
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Interview scheduled successfully",
+      calendarEvent: {
+        eventId: calendarResult.eventId,
+        studentEmail: student.email,
+        recruiterEmail: recruiter.email,
+        interviewTime,
+        jobTitle: job.title,
+        company: job.company
+      }
+    });
+  } catch (error) {
+    console.error("Schedule interview error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create recruitment drive/event
+app.post("/api/calendar/recruitment-drive", auth, recruiterAuth, async (req, res) => {
+  try {
+    const { eventName, startTime, endTime, location, description, studentEmails } = req.body;
+
+    // Validate required fields
+    if (!eventName || !startTime || !endTime || !location) {
+      return res.status(400).json({
+        success: false,
+        error: "eventName, startTime, endTime, and location are required"
+      });
+    }
+
+    // Get recruiter company info
+    const recruiter = await User.findById(req.user.id);
+
+    // Create recruitment drive event on Google Calendar
+    const calendarResult = await createRecruitmentDriveEvent(
+      eventName,
+      recruiter.companyName || "Company",
+      startTime,
+      endTime,
+      location,
+      description,
+      studentEmails || []
+    );
+
+    if (!calendarResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: "Failed to create recruitment drive event on calendar"
+      });
+    }
+
+    // Create notifications for all invited students
+    if (studentEmails && studentEmails.length > 0) {
+      const students = await User.find({ email: { $in: studentEmails }, role: 'student' });
+      for (const student of students) {
+        await createNotification(
+          student._id,
+          'system',
+          'Campus Recruitment Drive',
+          `You're invited to a recruitment drive: ${eventName} by ${recruiter.companyName}. Scheduled for ${new Date(startTime).toLocaleString()} at ${location}.`,
+          `/notifications`,
+          recruiter._id
+        );
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Recruitment drive created successfully",
+      event: {
+        eventId: calendarResult.eventId,
+        eventName,
+        company: recruiter.companyName,
+        startTime,
+        endTime,
+        location,
+        invitedStudents: studentEmails ? studentEmails.length : 0
+      }
+    });
+  } catch (error) {
+    console.error("Create recruitment drive error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all recruitment events for students to view
+app.get("/api/calendar/recruitment-events", auth, async (req, res) => {
+  try {
+    // Get all upcoming recruitment drive events
+    // Note: This would require storing them in database. For now, show a status
+    res.json({
+      success: true,
+      message: "Recruitment events are synced to Google Calendar",
+      note: "Check your Google Calendar for campus recruitment drives and events",
+      upcomingEvents: []
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =================================================================
 // SERVER START
 // =================================================================
+// =================================================================
+// GOOGLE CALENDAR APIs (Member 1/2 External API Integration)
+// Application Deadline Tracking with Google Calendar
+// =================================================================
+
+// Get user's upcoming application deadlines
+app.get("/api/calendar/deadlines", auth, async (req, res) => {
+  try {
+    const calendarEvents = await CalendarEvent.find({ user: req.user.id })
+      .populate('job', 'title company')
+      .sort({ deadline: 1 })
+      .limit(10);
+
+    // Separate upcoming and passed deadlines
+    const now = new Date();
+    const upcoming = calendarEvents.filter(e => new Date(e.deadline) > now);
+    const passed = calendarEvents.filter(e => new Date(e.deadline) <= now);
+
+    res.json({
+      success: true,
+      upcoming,
+      passed,
+      totalUpcoming: upcoming.length
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Sync all application deadlines to Google Calendar for a user
+app.post("/api/calendar/sync-deadlines", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    // Get all applications with deadlines
+    const applications = await Application.find({ user: req.user.id })
+      .populate('job');
+
+    let synced = 0;
+    let failed = 0;
+
+    for (const app of applications) {
+      if (app.job && app.job.applicationDeadline) {
+        // Check if already synced
+        const exists = await CalendarEvent.findOne({
+          application: app._id
+        });
+
+        if (!exists) {
+          const calendarResult = await addApplicationDeadlineToCalendar(
+            user.email,
+            app.job.title,
+            app.job.company,
+            app.job.applicationDeadline
+          );
+
+          if (calendarResult.success) {
+            const calendarEvent = new CalendarEvent({
+              user: req.user.id,
+              application: app._id,
+              job: app.job._id,
+              googleEventId: calendarResult.eventId,
+              deadline: app.job.applicationDeadline,
+              jobTitle: app.job.title,
+              company: app.job.company,
+              eventType: 'application_deadline'
+            });
+            await calendarEvent.save();
+            synced++;
+          } else {
+            failed++;
+          }
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Synced ${synced} deadlines to Google Calendar`,
+      synced,
+      failed,
+      total: applications.length
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Remove deadline from Google Calendar
+app.delete("/api/calendar/deadlines/:calendarEventId", auth, async (req, res) => {
+  try {
+    const calendarEvent = await CalendarEvent.findOne({
+      _id: req.params.calendarEventId,
+      user: req.user.id
+    });
+
+    if (!calendarEvent) {
+      return res.status(404).json({ success: false, error: "Calendar event not found" });
+    }
+
+    // Remove from Google Calendar
+    const result = await removeApplicationDeadlineFromCalendar(calendarEvent.googleEventId);
+
+    // Remove from database
+    await CalendarEvent.findByIdAndDelete(req.params.calendarEventId);
+
+    res.json({
+      success: true,
+      message: "Deadline removed from calendar"
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get calendar status (check if configured)
+app.get("/api/calendar/status", auth, async (req, res) => {
+  try {
+    const isConfigured = !!process.env.GOOGLE_CALENDAR_EMAIL;
+    const totalDeadlines = await CalendarEvent.countDocuments({ user: req.user.id });
+
+    res.json({
+      success: true,
+      configured: isConfigured,
+      message: isConfigured ? "Google Calendar is configured" : "Google Calendar not yet configured",
+      totalSyncedDeadlines: totalDeadlines
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =================================================================
+// SERVER STARTUP
+// =================================================================
+
 const PORT = process.env.PORT || 1350;
 app.listen(PORT, () => {
   console.log(`
@@ -2541,6 +3223,7 @@ app.listen(PORT, () => {
    • Automatic Deadline Management
    • Profile Snapshots
    • Relevance-Based Search
+   • 📅 Google Calendar Integration (Application Deadlines)
 
 ⚠️  PRODUCTION REMINDERS:
    • Replace console.log with real email service
@@ -2549,6 +3232,7 @@ app.listen(PORT, () => {
    • Enable HTTPS
    • Set secure JWT_SECRET
    • Configure proper CORS
+   • Configure Google Calendar API credentials
 `);
 });
 

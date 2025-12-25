@@ -76,10 +76,10 @@ function JobApplicationsPage() {
                   {applications.map((app) => (
                     <tr key={app._id}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {app.candidate?.name || "Unnamed Candidate"}
+                        {app.user?.name || "Unnamed Candidate"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {formatDate(app.appliedAt)}
+                        {formatDate(app.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {app.status || "Pending"}
