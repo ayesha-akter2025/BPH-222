@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useContext } from 'react';
+import Navbar from '../components/Navbar';
 import CalendarView from '../components/CalendarView';
 import DeadlineCountdown from '../components/DeadlineCountdown';
 import InterviewSchedule from '../components/InterviewSchedule';
@@ -21,7 +22,9 @@ const CalendarPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
       {/* Header */}
       <div className="bg-white shadow-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -101,7 +104,8 @@ const CalendarPage = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

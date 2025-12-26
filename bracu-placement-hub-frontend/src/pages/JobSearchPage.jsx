@@ -117,6 +117,11 @@ function JobSearchPage() {
                       <Link to={`/company/${job.companyId}`}>{job.company}</Link>
                     </p>
                     <p>{job.location}</p>
+                    {job.applicationDeadline && (
+                      <p className="text-sm text-red-700 font-medium mt-2">
+                        Deadline: {new Date(job.applicationDeadline).toLocaleString()}
+                      </p>
+                    )}
                     <button
                       onClick={() => handleJobClick(job._id)}
                       className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md"

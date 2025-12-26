@@ -149,6 +149,17 @@ function Navbar() {
                 >
                   💭 Forum
                 </button>
+                <button
+                  onClick={() => navigate("/calendar")}
+                  className={`px-4 py-2 rounded-md font-semibold transition relative ${isActive(
+                    "/calendar"
+                  )}`}
+                >
+                  📅 Calendar
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    ⭐
+                  </span>
+                </button>
               </>
             )}
 
@@ -200,6 +211,17 @@ function Navbar() {
                 >
                   💭 Forum
                 </button>
+                <button
+                  onClick={() => navigate("/calendar")}
+                  className={`px-4 py-2 rounded-md font-semibold transition relative ${isActive(
+                    "/calendar"
+                  )}`}
+                >
+                  📅 Calendar
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    ⭐
+                  </span>
+                </button>
               </>
             )}
 
@@ -229,6 +251,17 @@ function Navbar() {
                   )}`}
                 >
                   💭 Forum
+                </button>
+                <button
+                  onClick={() => navigate("/calendar")}
+                  className={`px-4 py-2 rounded-md font-semibold transition relative ${isActive(
+                    "/calendar"
+                  )}`}
+                >
+                  📅 Calendar
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    ⭐
+                  </span>
                 </button>
               </>
             )}
@@ -441,6 +474,20 @@ function Navbar() {
                   >
                     💭 Forum
                   </button>
+                  <button
+                    onClick={() => {
+                      navigate("/calendar");
+                      setShowMobileMenu(false);
+                    }}
+                    className={`px-4 py-2 rounded-md font-semibold transition text-left ${isActive(
+                      "/calendar"
+                    )} relative`}
+                  >
+                    📅 Calendar
+                    <span className="ml-2 inline-block bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                      ⭐
+                    </span>
+                  </button>
                 </>
               )}
 
@@ -507,6 +554,20 @@ function Navbar() {
                   >
                     💭 Forum
                   </button>
+                  <button
+                    onClick={() => {
+                      navigate("/calendar");
+                      setShowMobileMenu(false);
+                    }}
+                    className={`px-4 py-2 rounded-md font-semibold transition text-left ${isActive(
+                      "/calendar"
+                    )} relative`}
+                  >
+                    📅 Calendar
+                    <span className="ml-2 inline-block bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                      ⭐
+                    </span>
+                  </button>
                 </>
               )}
 
@@ -545,6 +606,20 @@ function Navbar() {
                     )}`}
                   >
                     💭 Forum
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate("/calendar");
+                      setShowMobileMenu(false);
+                    }}
+                    className={`px-4 py-2 rounded-md font-semibold transition text-left ${isActive(
+                      "/calendar"
+                    )} relative`}
+                  >
+                    📅 Calendar
+                    <span className="ml-2 inline-block bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                      ⭐
+                    </span>
                   </button>
                 </>
               )}

@@ -12,6 +12,8 @@ function CompanyProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [editingReviewId, setEditingReviewId] = useState(null);
+  const [userInfo, setUserInfo] = useState(null);
   
   // Review form
   const [reviewData, setReviewData] = useState({
@@ -24,7 +26,23 @@ function CompanyProfilePage() {
 
   useEffect(() => {
     fetchCompanyData();
+    fetchUserInfo();
   }, [companyId]);
+
+  const fetchUserInfo = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:1350/api/auth/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setUserInfo(data.user);
+      }
+    } catch (err) {
+      console.error("Error fetching user info:", err);
+    }
+  };
 
   const fetchCompanyData = async () => {
     try {
@@ -67,28 +85,51 @@ function CompanyProfilePage() {
     
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:1350/api/reviews/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          companyId,
-          ...reviewData,
-        }),
-      });
+      
+      if (editingReviewId) {
+        // Edit existing review
+        const response = await fetch(`http://localhost:1350/api/reviews/${editingReviewId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(reviewData),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to submit review");
-      }
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to update review");
+        }
 
-      if (data.moderated) {
-        alert("Your review has been submitted and is under moderation.");
+        alert("Review updated successfully!");
+        setEditingReviewId(null);
       } else {
-        alert("Review submitted successfully!");
+        // Create new review
+        const response = await fetch("http://localhost:1350/api/reviews/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            companyId,
+            ...reviewData,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to submit review");
+        }
+
+        if (data.moderated) {
+          alert("Your review has been submitted and is under moderation.");
+        } else {
+          alert("Review submitted successfully!");
+        }
       }
       
       setShowReviewForm(false);
@@ -99,6 +140,43 @@ function CompanyProfilePage() {
         careerGrowth: 5,
         comment: "",
       });
+      fetchCompanyData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleEditReview = (review) => {
+    setEditingReviewId(review._id);
+    setReviewData({
+      rating: review.rating,
+      workCulture: review.workCulture,
+      salary: review.salary,
+      careerGrowth: review.careerGrowth,
+      comment: review.comment,
+    });
+    setShowReviewForm(true);
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm("Are you sure you want to delete this review?")) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`http://localhost:1350/api/reviews/${reviewId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete review");
+      }
+
+      alert("Review deleted successfully!");
       fetchCompanyData();
     } catch (err) {
       alert(err.message);

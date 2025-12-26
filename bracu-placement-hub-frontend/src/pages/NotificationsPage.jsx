@@ -98,16 +98,39 @@ function NotificationsPage() {
       handleMarkAsRead(notification._id);
     }
 
-    // Navigate to linked content
-    if (notification.link) {
-      try {
-        navigate(notification.link);
-      } catch (err) {
-        setNotificationError(`Cannot navigate to: ${notification.link}`);
-        console.error("Navigation error:", err);
-      }
-    } else {
-      setNotificationError("This notification does not have a linked destination");
+    // Check if notification has a valid link
+    if (!notification.link) {
+      console.log("Notification has no link, just marking as read");
+      return;
+    }
+
+    // Validate the link before navigating
+    const validPrefixes = [
+      '/jobs',
+      '/profile',
+      '/messages',
+      '/invitations',
+      '/forum',
+      '/calendar',
+      '/applications',
+      '/recruiter/',
+      '/admin/'
+    ];
+    
+    const linkBase = notification.link.split('?')[0].split('#')[0];
+    const isValidLink = validPrefixes.some(prefix => linkBase.startsWith(prefix)) || linkBase.startsWith('/');
+    
+    if (!isValidLink) {
+      console.warn("Invalid notification link:", notification.link);
+      setNotificationError(`This notification does not have a valid destination`);
+      return;
+    }
+    
+    try {
+      navigate(notification.link);
+    } catch (err) {
+      console.error("Navigation error:", err);
+      setNotificationError(`Unable to navigate to notification destination`);
     }
   };
 

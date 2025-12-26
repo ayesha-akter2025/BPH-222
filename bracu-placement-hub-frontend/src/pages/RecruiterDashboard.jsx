@@ -217,6 +217,32 @@ function RecruiterDashboard() {
           </div>
         </div>
 
+        {/* Calendar Quick Access Card */}
+        <div className="mb-8 bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 rounded-lg shadow-lg overflow-hidden">
+          <div className="p-8 text-white">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center mb-3">
+                  <span className="text-4xl mr-3">📅</span>
+                  <h3 className="text-2xl font-bold">Interview Calendar</h3>
+                </div>
+                <p className="text-purple-100 mb-4 text-lg">
+                  Track deadlines, manage interviews, and never miss important dates
+                </p>
+                <button
+                  onClick={() => navigate("/calendar")}
+                  className="px-6 py-3 bg-white text-purple-600 font-bold rounded-lg hover:bg-gray-100 transition shadow-md"
+                >
+                  📅 View Calendar
+                </button>
+              </div>
+              <div className="hidden md:block text-6xl opacity-20">
+                ⏰
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Create New Job Button */}
         <div className="mb-6">
           <button

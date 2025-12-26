@@ -87,7 +87,7 @@ function MessagesPage() {
       const data = await response.json();
       //const recipient = usersData.users?.find(u => u.email === composeData.recipientEmail);
       
-      if (!recipient.ok) {
+      if (!response.ok) {
          throw new Error(data.error || "Failed to send message");
         //alert("User not found with this email");
         //return;

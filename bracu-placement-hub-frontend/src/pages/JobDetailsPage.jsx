@@ -119,8 +119,13 @@ function JobDetailsPage() {
               <div className="flex items-center">{job.type}</div>
               {(job.salaryMin || job.salaryMax) && (
                 <div className="flex items-center">
-                  BDT {job.salaryMin?.toLocaleString()} - BDT{" "}
+                  BDT {job.salaryMin?.toLocaleString()} - BDT {" "}
                   {job.salaryMax?.toLocaleString()}
+                </div>
+              )}
+              {job.applicationDeadline && (
+                <div className="flex items-center text-red-700 font-semibold">
+                  Application Deadline: {new Date(job.applicationDeadline).toLocaleString()}
                 </div>
               )}
             </div>
@@ -169,17 +174,23 @@ function JobDetailsPage() {
               <p className="text-green-700 font-semibold">
                 You have already applied to this job
               </p>
-            ) : job.status === "Open" ? (
+            ) : job.status !== "Open" ? (
+              <p className="text-gray-700 font-semibold">
+                This job is no longer accepting applications
+              </p>
+            ) : job.applicationDeadline && new Date() > new Date(job.applicationDeadline) ? (
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <p className="text-red-700 font-semibold">
+                  ❌ Application deadline has passed ({new Date(job.applicationDeadline).toLocaleString()})
+                </p>
+              </div>
+            ) : (
               <button
                 onClick={handleApply}
                 className="w-full px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold text-xl transition"
               >
                 Apply Now
               </button>
-            ) : (
-              <p className="text-gray-700 font-semibold">
-                This job is no longer accepting applications
-              </p>
             )}
           </div>
         </div>

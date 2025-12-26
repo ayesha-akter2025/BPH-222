@@ -500,11 +500,14 @@ const CalendarEventSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   application: { type: mongoose.Schema.Types.ObjectId, ref: "Application" },
   job: { type: mongoose.Schema.Types.ObjectId, ref: "Job", required: true },
-  googleEventId: { type: String, required: true },
+  googleEventId: { type: String },
   deadline: { type: Date, required: true },
   jobTitle: String,
   company: String,
-  eventType: { type: String, enum: ["application_deadline", "interview"], default: "application_deadline" }
+  eventType: { type: String, enum: ["job_posting_deadline", "application_deadline", "interview"], default: "application_deadline" },
+  isAutomaticSync: { type: Boolean, default: false },
+  googleSyncStatus: { type: String, enum: ["synced", "failed", "pending"], default: "pending" },
+  syncError: String
 }, { timestamps: true });
 
 const CalendarEvent = mongoose.model("CalendarEvent", CalendarEventSchema);
@@ -1207,31 +1210,51 @@ app.post("/api/jobs/apply", auth, async (req, res) => {
     });
 
     await newApplication.save();
-
-    // 📅 GOOGLE CALENDAR INTEGRATION: Add application deadline to student's calendar
+    // 📅 GOOGLE CALENDAR INTEGRATION: Check if deadline already in calendar from automatic sync
     let calendarEventId = null;
+    let existingCalendarEvent = null;
+    
     if (job.applicationDeadline) {
-      const calendarResult = await addApplicationDeadlineToCalendar(
-        user.email,
-        job.title,
-        job.company,
-        job.applicationDeadline
-      );
+      // Check if this job deadline is already in student's calendar (from automatic sync)
+      existingCalendarEvent = await CalendarEvent.findOne({
+        user: req.user.id,
+        job: jobId,
+        eventType: 'job_posting_deadline'
+      });
 
-      if (calendarResult.success) {
-        // Track calendar event in database
+      // Only add if not already synced
+      if (!existingCalendarEvent) {
+        const calendarResult = await addApplicationDeadlineToCalendar(
+          user.email,
+          job.title,
+          job.company,
+          job.applicationDeadline
+        );
+
+        // ✅ IMPORTANT: Save to database ALWAYS, regardless of Google Calendar sync status
         const calendarEvent = new CalendarEvent({
           user: req.user.id,
           application: newApplication._id,
           job: jobId,
-          googleEventId: calendarResult.eventId,
+          googleEventId: calendarResult.success ? calendarResult.eventId : null,
           deadline: job.applicationDeadline,
           jobTitle: job.title,
           company: job.company,
-          eventType: 'application_deadline'
+          eventType: 'application_deadline',
+          googleSyncStatus: calendarResult.success ? 'synced' : 'failed',
+          syncError: calendarResult.success ? null : calendarResult.error
         });
         await calendarEvent.save();
-        calendarEventId = calendarResult.eventId;
+        
+        if (calendarResult.success) {
+          calendarEventId = calendarResult.eventId;
+          console.log('✅ Application deadline added to Google Calendar');
+        } else {
+          console.log('✅ Application deadline tracked in database (Google Calendar sync failed)');
+        }
+      } else {
+        console.log('ℹ️ Job deadline already synced to student calendar');
+        calendarEventId = existingCalendarEvent.googleEventId;
       }
     }
 
@@ -1241,7 +1264,7 @@ app.post("/api/jobs/apply", auth, async (req, res) => {
       "application",
       "Application Submitted",
       `Your application for "${job.title}" at ${job.company} has been submitted successfully.${job.applicationDeadline ? ' Deadline added to your Google Calendar! 📅' : ''}`,
-      `/applications/${newApplication._id}`
+      `/jobs/${job._id}`
     );
 
     // Create notification for recruiter
@@ -1380,6 +1403,50 @@ app.post("/api/recruiter/jobs", auth, recruiterAuth, async (req, res) => {
         calendarEventId = calendarResult.eventId;
         console.log('✅ Job posting added to recruiter calendar:', calendarEventId);
       }
+
+      // 🚀 NEW: Automatically add job deadline to ALL students' calendars
+      try {
+        const allStudents = await User.find({ role: 'student' });
+        console.log(`📅 Syncing job deadline to ${allStudents.length} students' calendars...`);
+        
+        for (const student of allStudents) {
+          try {
+            const studentCalendarResult = await addApplicationDeadlineToCalendar(
+              student.email,
+              newJob.title,
+              newJob.company,
+              newJob.applicationDeadline
+            );
+
+            // ✅ IMPORTANT: Save to database ALWAYS, regardless of Google Calendar sync status
+            const calendarEvent = new CalendarEvent({
+              user: student._id,
+              job: newJob._id,
+              googleEventId: studentCalendarResult.success ? studentCalendarResult.eventId : null,
+              deadline: newJob.applicationDeadline,
+              jobTitle: newJob.title,
+              company: newJob.company,
+              eventType: 'job_posting_deadline',
+              isAutomaticSync: true, // Mark as automatic sync
+              googleSyncStatus: studentCalendarResult.success ? 'synced' : 'failed', // Track sync status
+              syncError: studentCalendarResult.success ? null : studentCalendarResult.error
+            });
+            await calendarEvent.save();
+
+            if (studentCalendarResult.success) {
+              console.log(`✅ Added ${newJob.title} deadline to ${student.email}`);
+            } else {
+              console.log(`✅ Tracked deadline in database for ${student.email} (Google Calendar sync failed)`);
+            }
+          } catch (studentError) {
+            console.error(`⚠️ Failed to track deadline for ${student.email}:`, studentError.message);
+            // Continue with other students if one fails
+          }
+        }
+      } catch (syncError) {
+        console.error('⚠️ Batch calendar sync error:', syncError.message);
+        // Don't fail the job creation if calendar sync fails
+      }
     }
 
     // Create notification for recruiters/admins about new job posting
@@ -1387,7 +1454,7 @@ app.post("/api/recruiter/jobs", auth, recruiterAuth, async (req, res) => {
       req.user.id,
       'system',
       'Job Posted Successfully',
-      `Your job posting for "${newJob.title}" at ${newJob.company} is now live and accepting applications.${newJob.applicationDeadline ? ' Deadline added to calendar! 📅' : ''}`,
+      `Your job posting for "${newJob.title}" at ${newJob.company} is now live and accepting applications.${newJob.applicationDeadline ? ' Deadline added to all student calendars! 📅' : ''}`,
       `/recruiter/jobs/${newJob._id}`
     );
 
@@ -1395,7 +1462,7 @@ app.post("/api/recruiter/jobs", auth, recruiterAuth, async (req, res) => {
       success: true,
       message: "Job posted successfully",
       job: newJob,
-      calendarEvent: calendarEventId ? { eventId: calendarEventId, message: "Job posting added to calendar" } : null
+      calendarEvent: calendarEventId ? { eventId: calendarEventId, message: "Job posting added to recruiter and all student calendars" } : null
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1666,7 +1733,7 @@ app.post("/api/recruiter/invite/:studentId", auth, recruiterAuth, async (req, re
       'invitation',
       'New Job Invitation',
       `You've been invited to apply for ${job.title} at ${job.company}`,
-      `/invitations/${invitation._id}`,
+      `/invitations`,
       invitation._id
     );
     
@@ -1761,7 +1828,7 @@ app.post("/api/invitations/:invitationId/respond", auth, async (req, res) => {
           'application',
           'Application Submitted',
           `Your application for ${invitation.job.title} has been submitted`,
-          `/applications/${application._id}`
+          `/jobs/${invitation.job._id}`
         );
         
         // Notify recruiter
@@ -1864,7 +1931,7 @@ app.post("/api/messages/send", auth, async (req, res) => {
           'message',
           'New Message',
           `You have a new message from ${req.user.name}`,
-          `/messages/${message._id}`,
+          `/messages`,
           message._id
         );
       }
@@ -2065,7 +2132,7 @@ app.post("/api/reviews/submit", auth, async (req, res) => {
           'system',
           'Content Flagged for Review',
           `A review has been flagged by AI for potential inappropriate content`,
-          `/admin/reviews/${review._id}`
+          `/admin/dashboard`
         );
       }
     }
@@ -2088,7 +2155,7 @@ app.get("/api/reviews/company/:companyId", auth, async (req, res) => {
     const reviews = await Review.find({ 
       company: req.params.companyId 
     })
-    .populate('reviewer', 'name')
+    .populate('reviewer', 'name _id')
     .sort({ createdAt: -1 });
     
     // Calculate average ratings
@@ -2102,6 +2169,81 @@ app.get("/api/reviews/company/:companyId", auth, async (req, res) => {
     
     res.json({ success: true, reviews, stats });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Edit review
+app.put("/api/reviews/:reviewId", auth, async (req, res) => {
+  try {
+    const { rating, workCulture, salary, careerGrowth, comment } = req.body;
+    
+    const review = await Review.findById(req.params.reviewId);
+    
+    if (!review) {
+      return res.status(404).json({ success: false, error: "Review not found" });
+    }
+    
+    // Check if user is the reviewer
+    if (review.reviewer.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, error: "You can only edit your own reviews" });
+    }
+    
+    // AI content moderation for updated comment
+    const moderation = await moderateContent(comment || '');
+    
+    review.rating = rating;
+    review.workCulture = workCulture;
+    review.salary = salary;
+    review.careerGrowth = careerGrowth;
+    review.comment = comment;
+    review.flagged = moderation.flagged;
+    review.flagReason = moderation.flagged ? moderation.flags.join('; ') : null;
+    review.aiAnalysis = moderation.analysis;
+    review.updatedAt = new Date();
+    
+    await review.save();
+    
+    res.json({ success: true, message: "Review updated successfully", review });
+  } catch (error) {
+    console.error("Edit review error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete review
+app.delete("/api/reviews/:reviewId", auth, async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.reviewId);
+    
+    if (!review) {
+      return res.status(404).json({ success: false, error: "Review not found" });
+    }
+    
+    // Check if user is the reviewer or admin
+    if (review.reviewer.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: "You can only delete your own reviews" });
+    }
+    
+    await Review.findByIdAndDelete(req.params.reviewId);
+    
+    res.json({ success: true, message: "Review deleted successfully" });
+  } catch (error) {
+    console.error("Delete review error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get user's reviews
+app.get("/api/reviews/my-reviews", auth, async (req, res) => {
+  try {
+    const reviews = await Review.find({ reviewer: req.user.id })
+      .populate('company', 'companyName')
+      .sort({ createdAt: -1 });
+    
+    res.json({ success: true, reviews });
+  } catch (error) {
+    console.error("Get my reviews error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -2145,7 +2287,7 @@ app.post("/api/forum/posts", auth, async (req, res) => {
           'system',
           'Forum Post Flagged',
           `A forum post has been flagged by AI`,
-          `/admin/forum/${post._id}`
+          `/forum`
         );
       }
     }
@@ -2270,7 +2412,7 @@ app.post("/api/forum/posts/:postId/comments", auth, async (req, res) => {
           'system',
           'Forum Comment Flagged',
           `A comment has been flagged by AI`,
-          `/admin/forum/comments/${comment._id}`
+          `/forum`
         );
       }
     }

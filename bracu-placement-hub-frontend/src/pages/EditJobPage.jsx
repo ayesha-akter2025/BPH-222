@@ -18,6 +18,7 @@ function EditJobPage() {
     requiredSkills: [],
     type: "Full-time",
     status: "Open",
+    applicationDeadline: "",
   });
   const [skillInput, setSkillInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,6 +65,7 @@ function EditJobPage() {
         requiredSkills: job.requiredSkills || [],
         type: job.type || "Full-time",
         status: job.status || "Open",
+        applicationDeadline: job.applicationDeadline || "",
       });
     } catch (err) {
       console.error("Error fetching job:", err);
@@ -138,6 +140,7 @@ function EditJobPage() {
         requiredSkills: formData.requiredSkills,
         type: formData.type,
         status: formData.status,
+        applicationDeadline: formData.applicationDeadline || undefined,
       };
 
       const response = await fetch(
@@ -328,6 +331,23 @@ function EditJobPage() {
                   className="w-full p-3 border border-gray-300 rounded-md"
                 />
               </div>
+            </div>
+
+            {/* Application Deadline */}
+            <div className="mb-4">
+              <label className="block text-gray-700 font-bold mb-2">
+                Application Deadline 📅
+              </label>
+              <input
+                type="datetime-local"
+                name="applicationDeadline"
+                value={formData.applicationDeadline}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Set a deadline for applications. This will be automatically added to all students' Google Calendar.
+              </p>
             </div>
 
             {/* Description */}
