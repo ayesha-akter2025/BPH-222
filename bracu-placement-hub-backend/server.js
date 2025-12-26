@@ -2185,18 +2185,19 @@ app.put("/api/reviews/:reviewId", auth, async (req, res) => {
     }
     
     // Check if user is the reviewer
-    if (review.reviewer.toString() !== req.user.id) {
+    if (review.reviewer.toString() !== req.user.id.toString()) {
       return res.status(403).json({ success: false, error: "You can only edit your own reviews" });
     }
     
     // AI content moderation for updated comment
     const moderation = await moderateContent(comment || '');
     
-    review.rating = rating;
-    review.workCulture = workCulture;
-    review.salary = salary;
-    review.careerGrowth = careerGrowth;
-    review.comment = comment;
+    if (rating !== undefined) review.rating = rating;
+    if (workCulture !== undefined) review.workCulture = workCulture;
+    if (salary !== undefined) review.salary = salary;
+    if (careerGrowth !== undefined) review.careerGrowth = careerGrowth;
+    if (comment !== undefined) review.comment = comment;
+    
     review.flagged = moderation.flagged;
     review.flagReason = moderation.flagged ? moderation.flags.join('; ') : null;
     review.aiAnalysis = moderation.analysis;
@@ -2221,7 +2222,7 @@ app.delete("/api/reviews/:reviewId", auth, async (req, res) => {
     }
     
     // Check if user is the reviewer or admin
-    if (review.reviewer.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (review.reviewer.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: "You can only delete your own reviews" });
     }
     
