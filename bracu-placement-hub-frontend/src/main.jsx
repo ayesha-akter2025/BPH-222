@@ -168,9 +168,19 @@ const router = createBrowserRouter([
   // ============================================
   // COMPANY & REVIEWS
   // ============================================
+  
+  {
+    path: "/company/profile",
+    element: <CompanyProfilePage />, // ✅ Recruiter's own profile (MUST be first)
+  },
+  {
+    path: "/company/my-profile",
+    element: <CompanyProfilePage />, // ✅ Alternative URL for own profile
+  },
+  
   {
     path: "/company/:companyId",
-    element: <CompanyProfilePage />, // NEW: View company profile and reviews
+    element: <CompanyProfilePage />, // NEW: View company profile and reviews / ✅ View any company by ID (MUST be last)
   },
 
   // ============================================

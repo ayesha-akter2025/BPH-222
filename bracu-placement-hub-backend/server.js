@@ -938,37 +938,41 @@ app.put("/api/profile/:userId", auth, async (req, res) => {
 // COMPANY PROFILE MANAGEMENT (Module 1 - Feature 3)
 // =================================================================
 
-// Get company profile
-app.get("/api/company/:companyId", auth, async (req, res) => {
+// =================================================================
+// COMPANY PROFILE MANAGEMENT (Module 1 - Feature 3)
+// =================================================================
+
+// ✅ NEW: Get MY company profile (recruiter viewing their own profile)
+// THIS MUST COME FIRST!
+app.get("/api/company/profile", auth, recruiterAuth, async (req, res) => {
   try {
-    const company = await User.findOne({
-      _id: req.params.companyId,
-      role: 'recruiter'
-    }).select('-password');
-    
+    const company = await User.findById(req.user.id).select('-password');
+
     if (!company) {
       return res.status(404).json({ success: false, error: "Company not found" });
     }
-    
+
     // Get company reviews
-    const reviews = await Review.find({ company: req.params.companyId })
+    const reviews = await Review.find({ company: req.user.id })
       .populate('reviewer', 'name')
       .sort({ createdAt: -1 })
-      .limit(5);
-    
-    // Calculate average rating
-    const avgRating = reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      .limit(10);
+
+    // Calculate average ratings
+    const allReviews = await Review.find({ company: req.user.id });
+    const avgRating = allReviews.length > 0
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
       : 0;
-    
+
     res.json({
       success: true,
       company,
       reviews,
       avgRating: avgRating.toFixed(1),
-      reviewCount: reviews.length
+      reviewCount: allReviews.length
     });
   } catch (error) {
+    console.error("Get my company profile error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1002,6 +1006,49 @@ app.put("/api/company/profile", auth, recruiterAuth, async (req, res) => {
   }
 });
 
+// Get company profile by ID (any user can view)
+app.get("/api/company/:companyId", auth, async (req, res) => {
+  try {
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(req.params.companyId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Invalid company ID format" 
+      });
+    }
+
+    const company = await User.findOne({
+      _id: req.params.companyId,
+      role: 'recruiter'
+    }).select('-password');
+    
+    if (!company) {
+      return res.status(404).json({ success: false, error: "Company not found" });
+    }
+    
+    // Get company reviews
+    const reviews = await Review.find({ company: req.params.companyId })
+      .populate('reviewer', 'name')
+      .sort({ createdAt: -1 })
+      .limit(5);
+    
+    // Calculate average rating
+    const avgRating = reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0;
+    
+    res.json({
+      success: true,
+      company,
+      reviews,
+      avgRating: avgRating.toFixed(1),
+      reviewCount: reviews.length
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Search companies
 app.get("/api/companies/search", auth, async (req, res) => {
   try {
@@ -1029,6 +1076,8 @@ app.get("/api/companies/search", auth, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+
 
 // =================================================================
 // JOB MANAGEMENT APIs
